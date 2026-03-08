@@ -1,0 +1,14 @@
+{
+  "name": "breath-artist",
+  "version": "1.0.0",
+  "description": "心と脳を調える呼吸法サポートアプリ「Breath Artist」",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "devDependencies": {
+    "vite": "^6.2.0"
+  }
+}
