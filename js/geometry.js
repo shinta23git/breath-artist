@@ -213,10 +213,23 @@ export class GeometryEngine {
     const maxR = Math.min(w, h) * 0.42;
     const params = lerpParams(this.paramsA, this.paramsB, this.progress);
 
-    // --- Layer 1: 背景（トレイル残像） ---
+    // --- Layer 1: 背景（トレイル残像 — 深い暗色に収束）---
     ctx.globalCompositeOperation = 'source-over';
-    ctx.fillStyle = 'rgba(8, 6, 20, 0.18)';
+    ctx.fillStyle = 'rgba(8, 5, 18, 0.12)';
     ctx.fillRect(0, 0, w, h);
+
+    // --- Layer 1.5: 温かいゴールドのアンビエントグロー（神秘的な明るさ）---
+    ctx.globalCompositeOperation = 'screen';
+    const glowPulse = 0.38 + 0.20 * ((this.breathScale - 0.7) / 0.3);
+    const ambGlow = ctx.createRadialGradient(cx, cy, 0, cx, cy, Math.min(w, h) * 0.75);
+    ambGlow.addColorStop(0,    `hsla(42, 98%, 75%, ${glowPulse})`);
+    ambGlow.addColorStop(0.25, `hsla(38, 92%, 65%, ${glowPulse * 0.65})`);
+    ambGlow.addColorStop(0.5,  `hsla(30, 85%, 55%, ${glowPulse * 0.30})`);
+    ambGlow.addColorStop(0.75, `hsla(22, 75%, 42%, ${glowPulse * 0.12})`);
+    ambGlow.addColorStop(1,    'transparent');
+    ctx.fillStyle = ambGlow;
+    ctx.fillRect(0, 0, w, h);
+    ctx.globalCompositeOperation = 'source-over';
 
     ctx.save();
     ctx.translate(cx, cy);
@@ -241,6 +254,10 @@ export class GeometryEngine {
     // --- Layer 6: 万華鏡セグメント ---
     ctx.globalCompositeOperation = 'screen';
     this.drawKaleidoscope(ctx, params, maxR, elapsed);
+
+    // --- Layer 6.5: ゆっくり回転するマンダラ花弁（source-over で色を明確に出す）---
+    ctx.globalCompositeOperation = 'source-over';
+    this.drawMandalaPetals(ctx, params, maxR, elapsed);
 
     // --- Layer 7: パーティクル ---
     ctx.globalCompositeOperation = 'lighter';
@@ -285,7 +302,7 @@ export class GeometryEngine {
     // 各中心に円を描画
     centers.forEach((c, i) => {
       const dist = Math.sqrt(c.x * c.x + c.y * c.y);
-      const alpha = Math.max(0.03, 0.22 - dist / (maxR * 1.2));
+      const alpha = Math.max(0.05, 0.35 - dist / (maxR * 1.1));
       const pulseAlpha = alpha * (0.7 + 0.3 * Math.sin(time * 1.5 + i * 0.2));
       const circleHue = hue0 + (dist / maxR) * params.hueDrift;
 
@@ -298,7 +315,7 @@ export class GeometryEngine {
       // 内部グロー（近い円のみ）
       if (dist < maxR * 0.5) {
         const glow = ctx.createRadialGradient(c.x, c.y, 0, c.x, c.y, baseRadius * 0.7);
-        glow.addColorStop(0, hsl(circleHue, params.saturation, 70, pulseAlpha * 0.12));
+        glow.addColorStop(0, hsl(circleHue, params.saturation, 70, pulseAlpha * 0.22));
         glow.addColorStop(1, 'transparent');
         ctx.beginPath();
         ctx.arc(c.x, c.y, baseRadius * 0.7, 0, Math.PI * 2);
@@ -330,7 +347,7 @@ export class GeometryEngine {
           (points[i].x - points[j].x) ** 2 + (points[i].y - points[j].y) ** 2
         );
         if (dist < maxR * 0.55) {
-          const alpha = 0.07 + 0.05 * Math.sin(time * 2 + i + j);
+          const alpha = 0.12 + 0.08 * Math.sin(time * 2 + i + j);
           ctx.beginPath();
           ctx.moveTo(points[i].x, points[i].y);
           ctx.lineTo(points[j].x, points[j].y);
@@ -365,7 +382,7 @@ export class GeometryEngine {
       const r = maxR * scale;
       const speed = (layer % 2 === 0 ? 1 : -1) * (0.12 - layer * 0.03);
       const rotation = time * speed;
-      const alpha = 0.12 - layer * 0.02;
+      const alpha = 0.2 - layer * 0.03;
       const hue0 = params.hueSecondary + layer * 40 + time * 5;
 
       ctx.save();
@@ -485,7 +502,7 @@ export class GeometryEngine {
     const petals = Math.round(petalCount);
     for (let layer = 0; layer < 3; layer++) {
       const layerOffset = layer * 0.15;
-      const layerAlpha = 0.22 - layer * 0.05;
+      const layerAlpha = 0.32 - layer * 0.06;
 
       for (let i = 0; i < petals; i++) {
         const t = i / petals;
@@ -539,6 +556,59 @@ export class GeometryEngine {
       ctx.lineWidth = 0.4;
       ctx.stroke();
     }
+  }
+
+  // ===== Layer 6.5: ゆっくり回転するマンダラ花弁 =====
+  drawMandalaPetals(ctx, params, maxR, time) {
+    const sym = Math.round(params.symmetry);
+    const breathAlpha = 0.5 + 0.5 * (this.breathScale - 0.7) / 0.3; // 吸う時に明るく
+    const h0 = params.hueBase + time * 8;
+    const h1 = params.hueSecondary + time * 6;
+
+    // 外側リング — 時計回り（尖った花弁、ティール系）
+    this._drawPetalRing(ctx, {
+      radius: maxR * 0.68,
+      count: sym,
+      len: maxR * 0.22,
+      width: maxR * 0.06,
+      hue0: h1 + 150,
+      hueDrift: 55,
+      sat: params.saturation,
+      light: 55,
+      alpha: 0.62 * breathAlpha,
+      rotation: time * 0.06,
+      pointed: true,
+    });
+
+    // 中間リング — 反時計回り（丸い花弁、ゴールド系）
+    this._drawPetalRing(ctx, {
+      radius: maxR * 0.45,
+      count: sym * 2,
+      len: maxR * 0.15,
+      width: maxR * 0.055,
+      hue0: h0 + 25,
+      hueDrift: 45,
+      sat: params.saturation + 8,
+      light: 60,
+      alpha: 0.65 * breathAlpha,
+      rotation: -time * 0.08,
+      pointed: false,
+    });
+
+    // 内側リング — 時計回り（小さな丸い花弁、ピンク系）
+    this._drawPetalRing(ctx, {
+      radius: maxR * 0.25,
+      count: sym,
+      len: maxR * 0.1,
+      width: maxR * 0.04,
+      hue0: h0 + 330,
+      hueDrift: 30,
+      sat: params.saturation + 5,
+      light: 65,
+      alpha: 0.68 * breathAlpha,
+      rotation: time * 0.1,
+      pointed: false,
+    });
   }
 
   // ===== Layer 7: パーティクルシステム =====
@@ -647,7 +717,7 @@ export class GeometryEngine {
 
     for (let i = 0; i < rayCount; i++) {
       const angle = (i / rayCount) * Math.PI * 2;
-      const pulse = 0.03 + 0.025 * Math.sin(time * 1.8 + i * 1.3);
+      const pulse = 0.055 + 0.04 * Math.sin(time * 1.8 + i * 1.3);
       const rayLen = maxR * (0.7 + 0.3 * Math.sin(time * 0.8 + i * 0.5));
       const rayW = maxR * 0.08;
 
@@ -680,89 +750,390 @@ export class GeometryEngine {
     const hue0 = params.hueBase + time * 12;
     const glowR = maxR * 0.3;
 
-    // メイングロー
+    // メイングロー（強化）
     const g1 = ctx.createRadialGradient(0, 0, 0, 0, 0, glowR);
-    g1.addColorStop(0, PALETTE.white(0.25 * pulse));
-    g1.addColorStop(0.2, hsl(hue0, 60, 80, 0.15 * pulse));
-    g1.addColorStop(0.5, hsl(hue0 + 30, 50, 60, 0.06 * pulse));
+    g1.addColorStop(0, PALETTE.white(0.45 * pulse));
+    g1.addColorStop(0.15, hsl(hue0 + 40, 70, 90, 0.3 * pulse));
+    g1.addColorStop(0.35, hsl(hue0, 60, 75, 0.15 * pulse));
+    g1.addColorStop(0.6, hsl(hue0 + 30, 50, 60, 0.06 * pulse));
     g1.addColorStop(1, 'transparent');
     ctx.beginPath();
     ctx.arc(0, 0, glowR, 0, Math.PI * 2);
     ctx.fillStyle = g1;
     ctx.fill();
 
-    // セカンダリグロー（ゴールド）
-    const g2R = maxR * 0.15;
+    // ゴールドグロー
+    const g2R = maxR * 0.18;
     const g2 = ctx.createRadialGradient(0, 0, 0, 0, 0, g2R);
-    g2.addColorStop(0, PALETTE.gold(0.2 * pulse));
-    g2.addColorStop(0.5, hsl(hue0 - 30, 70, 70, 0.08 * pulse));
+    g2.addColorStop(0, PALETTE.gold(0.4 * pulse));
+    g2.addColorStop(0.4, hsl(hue0 - 20, 70, 70, 0.15 * pulse));
     g2.addColorStop(1, 'transparent');
     ctx.beginPath();
     ctx.arc(0, 0, g2R, 0, Math.PI * 2);
     ctx.fillStyle = g2;
     ctx.fill();
+
+    // 極小の白いコア
+    const gCore = ctx.createRadialGradient(0, 0, 0, 0, 0, maxR * 0.06);
+    gCore.addColorStop(0, PALETTE.white(0.7 * pulse));
+    gCore.addColorStop(1, 'transparent');
+    ctx.beginPath();
+    ctx.arc(0, 0, maxR * 0.06, 0, Math.PI * 2);
+    ctx.fillStyle = gCore;
+    ctx.fill();
   }
 
-  // ===== キャプチャ（アート生成用） =====
+  // ===== アート用キャプチャ: ヘルパーメソッド群 =====
+
+  /** 花弁パス生成（原点から+x方向に伸びる） */
+  _petalPath(ctx, len, w, pointed) {
+    ctx.beginPath();
+    if (pointed) {
+      ctx.moveTo(0, 0);
+      ctx.lineTo(len * 0.55, -w * 0.35);
+      ctx.lineTo(len, 0);
+      ctx.lineTo(len * 0.55, w * 0.35);
+    } else {
+      ctx.moveTo(0, 0);
+      ctx.bezierCurveTo(len * 0.25, -w, len * 0.75, -w * 0.5, len, 0);
+      ctx.bezierCurveTo(len * 0.75, w * 0.5, len * 0.25, w, 0, 0);
+    }
+    ctx.closePath();
+  }
+
+  /** 花弁リング描画 */
+  _drawPetalRing(ctx, cfg) {
+    const { radius, count, len, width, hue0: h0, hueDrift: hd, sat, light, alpha, rotation, pointed } = cfg;
+    ctx.save();
+    ctx.rotate(rotation || 0);
+    for (let i = 0; i < count; i++) {
+      const angle = (i / count) * Math.PI * 2;
+      const pH = h0 + (i / count) * (hd || 60);
+      ctx.save();
+      ctx.rotate(angle);
+      ctx.translate(radius, 0);
+      this._petalPath(ctx, len, width, pointed);
+
+      const g = ctx.createLinearGradient(0, 0, len, 0);
+      g.addColorStop(0, hsl(pH, sat, light + 15, alpha));
+      g.addColorStop(0.4, hsl(pH + 10, sat - 5, light, alpha * 0.7));
+      g.addColorStop(1, hsl(pH + 20, sat - 15, light - 15, alpha * 0.15));
+      ctx.fillStyle = g;
+      ctx.fill();
+
+      ctx.strokeStyle = hsl(pH, sat + 10, light + 25, alpha * 0.35);
+      ctx.lineWidth = 0.6;
+      ctx.stroke();
+      ctx.restore();
+    }
+    ctx.restore();
+  }
+
+  /** 星空背景描画 */
+  _drawStarField(ctx, halfSize, rng) {
+    for (let i = 0; i < 400; i++) {
+      const x = (rng() - 0.5) * halfSize * 2;
+      const y = (rng() - 0.5) * halfSize * 2;
+      const r = rng() * 1.2 + 0.2;
+      const a = rng() * 0.6 + 0.2;
+      ctx.beginPath();
+      ctx.arc(x, y, r, 0, Math.PI * 2);
+      ctx.fillStyle = `rgba(255, 255, 240, ${a})`;
+      ctx.fill();
+    }
+  }
+
+  /** ジェムレイ（宝石風光線） */
+  _drawGemRays(ctx, maxR, params) {
+    const sym = Math.round(params.symmetry);
+    const h0 = params.hueBase + 30;
+    for (let i = 0; i < sym; i++) {
+      const angle = (i / sym) * Math.PI * 2;
+      const rayLen = maxR * 0.9;
+      const rayW = maxR * 0.055;
+      const h = h0 + i * (360 / sym);
+      ctx.save();
+      ctx.rotate(angle);
+
+      // メインレイ
+      ctx.beginPath();
+      ctx.moveTo(maxR * 0.12, 0);
+      ctx.lineTo(rayLen, -rayW);
+      ctx.lineTo(rayLen * 1.05, 0);
+      ctx.lineTo(rayLen, rayW);
+      ctx.closePath();
+      const g = ctx.createLinearGradient(maxR * 0.12, 0, rayLen, 0);
+      g.addColorStop(0, hsl(h, 65, 80, 0.35));
+      g.addColorStop(0.4, hsl(h, 55, 65, 0.15));
+      g.addColorStop(1, hsl(h, 40, 50, 0.02));
+      ctx.fillStyle = g;
+      ctx.fill();
+
+      // エッジハイライト
+      ctx.strokeStyle = hsl(h, 60, 85, 0.12);
+      ctx.lineWidth = 0.4;
+      ctx.stroke();
+      ctx.restore();
+    }
+  }
+
+  /** ロータス中心花 */
+  _drawLotusCenter(ctx, maxR, params) {
+    const h0 = params.hueBase + params.hueDrift + 180;
+    for (let layer = 3; layer >= 0; layer--) {
+      const count = 8 + layer * 4;
+      const r = maxR * (0.04 + layer * 0.055);
+      const len = maxR * (0.1 + layer * 0.035);
+      const w = len * (0.3 + layer * 0.04);
+      const h = h0 + layer * 22;
+      ctx.save();
+      ctx.rotate(layer * Math.PI / (count * 2));
+      for (let i = 0; i < count; i++) {
+        const a = (i / count) * Math.PI * 2;
+        const pH = h + (i / count) * 35;
+        ctx.save();
+        ctx.rotate(a);
+        ctx.translate(r, 0);
+        this._petalPath(ctx, len, w, false);
+        const g = ctx.createLinearGradient(0, 0, len, 0);
+        g.addColorStop(0, hsl(pH, 70, 78, 0.65));
+        g.addColorStop(0.5, hsl(pH + 10, 65, 65, 0.45));
+        g.addColorStop(1, hsl(pH + 20, 55, 55, 0.1));
+        ctx.fillStyle = g;
+        ctx.fill();
+        ctx.strokeStyle = hsl(pH, 70, 88, 0.2);
+        ctx.lineWidth = 0.3;
+        ctx.stroke();
+        ctx.restore();
+      }
+      ctx.restore();
+    }
+  }
+
+  /** ダイヤモンド装飾を周囲に配置 */
+  _drawDiamondRing(ctx, maxR, count, params) {
+    const h0 = params.hueBase;
+    for (let i = 0; i < count; i++) {
+      const angle = (i / count) * Math.PI * 2;
+      const dx = Math.cos(angle) * maxR;
+      const dy = Math.sin(angle) * maxR;
+      const ds = maxR * 0.025;
+      const pulse = 0.4 + 0.3 * Math.sin(i * 1.7);
+      ctx.save();
+      ctx.translate(dx, dy);
+      ctx.rotate(angle);
+      ctx.beginPath();
+      ctx.moveTo(0, -ds);
+      ctx.lineTo(ds * 0.7, 0);
+      ctx.lineTo(0, ds);
+      ctx.lineTo(-ds * 0.7, 0);
+      ctx.closePath();
+      ctx.fillStyle = hsl(h0 + 42, 75, 75, pulse);
+      ctx.fill();
+      ctx.restore();
+    }
+  }
+
+  // ===== キャプチャ（マンダラアート生成） =====
   capture(size) {
     const captureCanvas = document.createElement('canvas');
     captureCanvas.width = size;
     captureCanvas.height = size;
-    const capCtx = captureCanvas.getContext('2d');
-
+    const ctx = captureCanvas.getContext('2d');
     const cx = size / 2;
     const cy = size / 2;
-    const maxR = size * 0.42;
-
-    // 背景
-    const bgGrad = capCtx.createRadialGradient(cx, cy, 0, cx, cy, size * 0.7);
-    bgGrad.addColorStop(0, '#1a1040');
-    bgGrad.addColorStop(0.5, '#0f0a2a');
-    bgGrad.addColorStop(1, '#080614');
-    capCtx.fillStyle = bgGrad;
-    capCtx.fillRect(0, 0, size, size);
+    const maxR = size * 0.44;
 
     const params = lerpParams(this.paramsA, this.paramsB, 0.85);
     const elapsed = performance.now() / 1000;
+    const h0 = params.hueBase;
+    const h1 = params.hueSecondary;
+    const sym = Math.round(params.symmetry);
+    const sat = params.saturation;
 
-    capCtx.save();
-    capCtx.translate(cx, cy);
+    // キャプチャ用シードRNG
+    const rng = seededRandom(hashText(
+      h0.toFixed(2) + h1.toFixed(2) + sym + sat.toFixed(2)
+    ));
 
-    // 全レイヤーを描画
-    capCtx.globalCompositeOperation = 'screen';
-    this.drawFlowerOfLife(capCtx, params, maxR, elapsed);
+    ctx.save();
+    ctx.translate(cx, cy);
 
-    capCtx.globalCompositeOperation = 'lighter';
-    this.drawMetatronsCube(capCtx, params, maxR, elapsed);
+    // ========== Layer 1: 背景 + 星空 ==========
+    const bg = ctx.createRadialGradient(0, 0, 0, 0, 0, size * 0.72);
+    bg.addColorStop(0, hsl(h0 + 240, 40, 24, 1));
+    bg.addColorStop(0.4, hsl(h0 + 255, 50, 14, 1));
+    bg.addColorStop(0.75, hsl(h0 + 268, 55, 8, 1));
+    bg.addColorStop(1, hsl(h0 + 275, 60, 4, 1));
+    ctx.fillStyle = bg;
+    ctx.fillRect(-cx, -cy, size, size);
 
-    capCtx.globalCompositeOperation = 'screen';
-    this.drawHexagrams(capCtx, params, maxR, elapsed);
-    this.drawGoldenSpirals(capCtx, params, maxR, elapsed);
-    this.drawKaleidoscope(capCtx, params, maxR, elapsed);
+    // 星雲パッチ（大きなソフトな色の塊）
+    ctx.globalCompositeOperation = 'screen';
+    for (let i = 0; i < 8; i++) {
+      const nx = (rng() - 0.5) * size * 0.7;
+      const ny = (rng() - 0.5) * size * 0.7;
+      const nr = rng() * size * 0.22 + size * 0.08;
+      const nh = h0 + rng() * 150;
+      const ng = ctx.createRadialGradient(nx, ny, 0, nx, ny, nr);
+      ng.addColorStop(0, hsl(nh, 50, 45, 0.1));
+      ng.addColorStop(1, 'transparent');
+      ctx.fillStyle = ng;
+      ctx.fillRect(-cx, -cy, size, size);
+    }
 
-    // パーティクル静的スナップショット
-    capCtx.globalCompositeOperation = 'lighter';
-    this.particles.forEach((p) => {
-      const alpha = p.getAlpha() * 0.5;
-      if (alpha <= 0) return;
-      const pH = params.particleHue + p.hueOffset;
-      const glow = capCtx.createRadialGradient(p.x, p.y, 0, p.x, p.y, p.size * 3);
-      glow.addColorStop(0, hsl(pH, 70, 85, alpha * 0.5));
-      glow.addColorStop(1, 'transparent');
-      capCtx.beginPath();
-      capCtx.arc(p.x, p.y, p.size * 3, 0, Math.PI * 2);
-      capCtx.fillStyle = glow;
-      capCtx.fill();
+    // 星空
+    ctx.globalCompositeOperation = 'lighter';
+    this._drawStarField(ctx, cx, rng);
+
+    // ========== Layer 2: 外側オーラ ==========
+    ctx.globalCompositeOperation = 'screen';
+    const aura = ctx.createRadialGradient(0, 0, maxR * 0.25, 0, 0, maxR * 1.15);
+    aura.addColorStop(0, hsl(h0, 50, 65, 0.15));
+    aura.addColorStop(0.5, hsl(h0 + 60, 40, 45, 0.08));
+    aura.addColorStop(1, 'transparent');
+    ctx.fillStyle = aura;
+    ctx.fillRect(-cx, -cy, size, size);
+
+    // ========== Layer 3: ジェムレイ（宝石風光線） ==========
+    ctx.globalCompositeOperation = 'screen';
+    this._drawGemRays(ctx, maxR, params);
+
+    // ========== Layer 4: 花弁リング群（外→内、マンダラの核心） ==========
+    ctx.globalCompositeOperation = 'screen';
+
+    // リング1: 最外周 — 尖った花弁（ティール〜グリーン系）
+    this._drawPetalRing(ctx, {
+      radius: maxR * 0.76, count: sym,
+      len: maxR * 0.28, width: maxR * 0.075,
+      hue0: h1 + 160, hueDrift: 70, sat: sat + 5, light: 55,
+      alpha: 0.55, rotation: 0, pointed: true,
+    });
+    // 同リングを回転ずらしで重ねて深み
+    this._drawPetalRing(ctx, {
+      radius: maxR * 0.74, count: sym,
+      len: maxR * 0.24, width: maxR * 0.065,
+      hue0: h1 + 175, hueDrift: 55, sat: sat, light: 50,
+      alpha: 0.35, rotation: Math.PI / sym, pointed: true,
     });
 
-    capCtx.globalCompositeOperation = 'screen';
-    this.drawOuterRing(capCtx, params, maxR, elapsed);
-    capCtx.globalCompositeOperation = 'lighter';
-    this.drawGodRays(capCtx, params, maxR, elapsed);
-    this.drawCenterGlow(capCtx, params, maxR, elapsed);
+    // リング2: 中外周 — 丸い花弁（ブルー〜パープル系）
+    this._drawPetalRing(ctx, {
+      radius: maxR * 0.55, count: sym * 2,
+      len: maxR * 0.2, width: maxR * 0.075,
+      hue0: h0 + 220, hueDrift: 80, sat: sat, light: 55,
+      alpha: 0.5, rotation: 0, pointed: false,
+    });
+    this._drawPetalRing(ctx, {
+      radius: maxR * 0.53, count: sym * 2,
+      len: maxR * 0.17, width: maxR * 0.06,
+      hue0: h0 + 240, hueDrift: 60, sat: sat - 5, light: 50,
+      alpha: 0.3, rotation: Math.PI / (sym * 2), pointed: false,
+    });
 
-    capCtx.restore();
-    capCtx.globalCompositeOperation = 'source-over';
+    // リング3: 中周 — ゴールド〜アンバー系
+    this._drawPetalRing(ctx, {
+      radius: maxR * 0.4, count: sym + 4,
+      len: maxR * 0.18, width: maxR * 0.065,
+      hue0: h0 + 30, hueDrift: 45, sat: sat + 10, light: 62,
+      alpha: 0.55, rotation: Math.PI / (sym + 4) * 0.5, pointed: false,
+    });
+
+    // リング4: 内周 — ピンク〜コーラル系
+    this._drawPetalRing(ctx, {
+      radius: maxR * 0.25, count: sym,
+      len: maxR * 0.16, width: maxR * 0.06,
+      hue0: h0 + 330, hueDrift: 35, sat: sat + 5, light: 65,
+      alpha: 0.55, rotation: 0, pointed: false,
+    });
+    this._drawPetalRing(ctx, {
+      radius: maxR * 0.24, count: sym,
+      len: maxR * 0.13, width: maxR * 0.05,
+      hue0: h0 + 345, hueDrift: 25, sat: sat, light: 60,
+      alpha: 0.35, rotation: Math.PI / sym, pointed: false,
+    });
+
+    // ========== Layer 5: 幾何学オーバーレイ（既存描画を活用） ==========
+    ctx.globalCompositeOperation = 'screen';
+    this.drawFlowerOfLife(ctx, params, maxR, elapsed);
+    this.drawHexagrams(ctx, params, maxR, elapsed);
+    this.drawGoldenSpirals(ctx, params, maxR, elapsed);
+
+    // 2パス目で輝度アップ
+    this.drawFlowerOfLife(ctx, params, maxR, elapsed + 0.5);
+
+    // ========== Layer 6: ロータス中心花 ==========
+    ctx.globalCompositeOperation = 'screen';
+    this._drawLotusCenter(ctx, maxR, params);
+
+    // ========== Layer 7: ワイヤーフレーム装飾 ==========
+    // 同心円
+    ctx.globalCompositeOperation = 'screen';
+    const circleRadii = [0.2, 0.35, 0.5, 0.65, 0.82, 0.95];
+    circleRadii.forEach((ratio, i) => {
+      const r = maxR * ratio;
+      ctx.beginPath();
+      ctx.arc(0, 0, r, 0, Math.PI * 2);
+      ctx.strokeStyle = hsl(h0 + i * 20, 40, 70, 0.12 + i * 0.02);
+      ctx.lineWidth = i === circleRadii.length - 1 ? 1.2 : 0.5;
+      ctx.stroke();
+    });
+
+    // 外輪ダイヤモンド装飾
+    ctx.globalCompositeOperation = 'lighter';
+    this._drawDiamondRing(ctx, maxR * 0.95, sym * 2, params);
+
+    // ========== Layer 8: ゴッドレイ ==========
+    ctx.globalCompositeOperation = 'lighter';
+    this.drawGodRays(ctx, params, maxR, elapsed);
+    this.drawGodRays(ctx, params, maxR, elapsed + 1.8);
+
+    // ========== Layer 9: 中心グロー ==========
+    ctx.globalCompositeOperation = 'lighter';
+
+    // 大きなグロー
+    const g1 = ctx.createRadialGradient(0, 0, 0, 0, 0, maxR * 0.4);
+    g1.addColorStop(0, PALETTE.white(0.55));
+    g1.addColorStop(0.1, hsl(h0 + 40, 70, 90, 0.35));
+    g1.addColorStop(0.3, hsl(h0, 60, 75, 0.15));
+    g1.addColorStop(0.6, hsl(h0 + 270, 45, 55, 0.05));
+    g1.addColorStop(1, 'transparent');
+    ctx.beginPath();
+    ctx.arc(0, 0, maxR * 0.4, 0, Math.PI * 2);
+    ctx.fillStyle = g1;
+    ctx.fill();
+
+    // 白いコア
+    const g2 = ctx.createRadialGradient(0, 0, 0, 0, 0, maxR * 0.1);
+    g2.addColorStop(0, PALETTE.white(0.95));
+    g2.addColorStop(0.3, PALETTE.white(0.5));
+    g2.addColorStop(1, 'transparent');
+    ctx.beginPath();
+    ctx.arc(0, 0, maxR * 0.1, 0, Math.PI * 2);
+    ctx.fillStyle = g2;
+    ctx.fill();
+
+    // ========== Layer 10: スパークル ==========
+    for (let i = 0; i < 60; i++) {
+      const angle = rng() * Math.PI * 2;
+      const dist = rng() * maxR * 0.92;
+      const sx = Math.cos(angle) * dist;
+      const sy = Math.sin(angle) * dist;
+      const sr = rng() * 2.5 + 0.8;
+      const sa = rng() * 0.55 + 0.25;
+
+      const sg = ctx.createRadialGradient(sx, sy, 0, sx, sy, sr * 3.5);
+      sg.addColorStop(0, PALETTE.white(sa));
+      sg.addColorStop(0.25, hsl(h0 + rng() * 80, 60, 82, sa * 0.4));
+      sg.addColorStop(1, 'transparent');
+      ctx.beginPath();
+      ctx.arc(sx, sy, sr * 3.5, 0, Math.PI * 2);
+      ctx.fillStyle = sg;
+      ctx.fill();
+    }
+
+    ctx.restore();
+    ctx.globalCompositeOperation = 'source-over';
 
     return captureCanvas;
   }

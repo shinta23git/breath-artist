@@ -16,46 +16,78 @@ export function generateArt(geometryCanvas, formData) {
   // 1. 幾何学模様を背景として描画
   ctx.drawImage(geometryCanvas, 0, 0, size, size);
 
-  // 2. 上部にグラデーションオーバーレイ（テキスト読みやすくする）
-  const topGrad = ctx.createLinearGradient(0, 0, 0, size * 0.3);
-  topGrad.addColorStop(0, 'rgba(10, 10, 26, 0.85)');
-  topGrad.addColorStop(1, 'rgba(10, 10, 26, 0)');
-  ctx.fillStyle = topGrad;
-  ctx.fillRect(0, 0, size, size * 0.3);
-
-  // 3. 下部にグラデーションオーバーレイ
-  const bottomGrad = ctx.createLinearGradient(0, size * 0.7, 0, size);
-  bottomGrad.addColorStop(0, 'rgba(10, 10, 26, 0)');
-  bottomGrad.addColorStop(1, 'rgba(10, 10, 26, 0.85)');
-  ctx.fillStyle = bottomGrad;
-  ctx.fillRect(0, size * 0.7, size, size * 0.3);
-
-  // 4. 放射状の光エフェクト
-  const glowGrad = ctx.createRadialGradient(size / 2, size / 2, 0, size / 2, size / 2, size * 0.5);
-  glowGrad.addColorStop(0, 'rgba(139, 92, 246, 0.08)');
-  glowGrad.addColorStop(0.5, 'rgba(99, 102, 241, 0.04)');
-  glowGrad.addColorStop(1, 'transparent');
-  ctx.fillStyle = glowGrad;
+  // 2. 明るさを加算する中心光エフェクト
+  ctx.globalCompositeOperation = 'screen';
+  const centerGlow = ctx.createRadialGradient(size / 2, size / 2, 0, size / 2, size / 2, size * 0.5);
+  centerGlow.addColorStop(0, 'rgba(255, 240, 220, 0.25)');
+  centerGlow.addColorStop(0.2, 'rgba(200, 170, 255, 0.15)');
+  centerGlow.addColorStop(0.5, 'rgba(120, 100, 220, 0.08)');
+  centerGlow.addColorStop(1, 'transparent');
+  ctx.fillStyle = centerGlow;
   ctx.fillRect(0, 0, size, size);
+  ctx.globalCompositeOperation = 'source-over';
 
-  // 5. アプリ名（上部小さく）
+  // 3. 上部に軽めのグラデーション（テキスト読みやすく、かつ暗くしすぎない）
+  const topGrad = ctx.createLinearGradient(0, 0, 0, size * 0.22);
+  topGrad.addColorStop(0, 'rgba(15, 10, 35, 0.55)');
+  topGrad.addColorStop(1, 'transparent');
+  ctx.fillStyle = topGrad;
+  ctx.fillRect(0, 0, size, size * 0.22);
+
+  // 4. 下部に軽めのグラデーション
+  const bottomGrad = ctx.createLinearGradient(0, size * 0.82, 0, size);
+  bottomGrad.addColorStop(0, 'transparent');
+  bottomGrad.addColorStop(1, 'rgba(15, 10, 35, 0.55)');
+  ctx.fillStyle = bottomGrad;
+  ctx.fillRect(0, size * 0.82, size, size * 0.18);
+
+  // 5. 光の粒子（ボケ効果）をランダム配置
+  drawBokehParticles(ctx, size);
+
+  // 6. アプリ名（上部 — ゴールドの光沢感）
   ctx.textAlign = 'center';
-  ctx.fillStyle = 'rgba(212, 168, 86, 0.6)';
+  ctx.shadowColor = 'rgba(212, 168, 86, 0.6)';
+  ctx.shadowBlur = 12;
+  ctx.fillStyle = 'rgba(230, 200, 130, 0.85)';
   ctx.font = '300 24px "Noto Sans JP", sans-serif';
   ctx.letterSpacing = '4px';
-  ctx.fillText('Breath Artist', size / 2, 60);
+  ctx.fillText('Breath Artist', size / 2, 55);
+  ctx.shadowBlur = 0;
 
-  // 6.「ありたい状態」テキスト（上部メイン）
-  ctx.fillStyle = 'rgba(232, 230, 240, 0.9)';
+  // 7.「ありたい状態」テキスト（光る白文字）
+  ctx.shadowColor = 'rgba(200, 200, 255, 0.5)';
+  ctx.shadowBlur = 10;
+  ctx.fillStyle = 'rgba(245, 242, 255, 0.95)';
   ctx.font = '400 36px "Noto Sans JP", sans-serif';
-  wrapText(ctx, formData.afterText, size / 2, 120, size * 0.75, 48);
+  wrapText(ctx, formData.afterText, size / 2, 115, size * 0.75, 48);
+  ctx.shadowBlur = 0;
 
-  // 7. 価値観キーワード（下部）
-  const valueY = size - 80;
+  // 8. 装飾線（ゴールド光る細線）
+  ctx.shadowColor = 'rgba(212, 168, 86, 0.4)';
+  ctx.shadowBlur = 6;
+  ctx.strokeStyle = 'rgba(212, 168, 86, 0.35)';
+  ctx.lineWidth = 0.8;
+  ctx.beginPath();
+  ctx.moveTo(size * 0.15, 75);
+  ctx.lineTo(size * 0.85, 75);
+  ctx.stroke();
+
+  // 上部装飾線の中央ダイヤ
+  drawDiamond(ctx, size / 2, 75, 5, 'rgba(212, 168, 86, 0.6)');
+
+  ctx.beginPath();
+  ctx.moveTo(size * 0.15, size - 115);
+  ctx.lineTo(size * 0.85, size - 115);
+  ctx.stroke();
+  drawDiamond(ctx, size / 2, size - 115, 5, 'rgba(212, 168, 86, 0.6)');
+  ctx.shadowBlur = 0;
+
+  // 9. 価値観キーワード（下部 — 光るチップ）
+  const valueY = size - 75;
   const valueKeywords = formData.values.map((v) => v.keyword);
   const totalWidth = valueKeywords.reduce((sum, kw) => {
     ctx.font = '500 28px "Noto Sans JP", sans-serif';
-    return sum + ctx.measureText(kw).width + 48; // パディング込み
+    return sum + ctx.measureText(kw).width + 48;
   }, 0) - 16;
 
   let valueX = (size - totalWidth) / 2;
@@ -65,39 +97,79 @@ export function generateArt(geometryCanvas, formData) {
     const chipWidth = textWidth + 32;
     const chipHeight = 44;
 
-    // チップ背景
     const chipX = valueX;
     const chipY = valueY - chipHeight / 2;
+
+    // チップのグロー背景
+    ctx.shadowColor = 'rgba(212, 168, 86, 0.3)';
+    ctx.shadowBlur = 10;
     ctx.beginPath();
     roundRect(ctx, chipX, chipY, chipWidth, chipHeight, 22);
-    ctx.fillStyle = 'rgba(212, 168, 86, 0.15)';
+    ctx.fillStyle = 'rgba(212, 168, 86, 0.2)';
     ctx.fill();
-    ctx.strokeStyle = 'rgba(212, 168, 86, 0.5)';
+    ctx.strokeStyle = 'rgba(230, 200, 130, 0.6)';
     ctx.lineWidth = 1;
     ctx.stroke();
+    ctx.shadowBlur = 0;
 
     // チップテキスト
-    ctx.fillStyle = 'rgba(212, 168, 86, 0.9)';
+    ctx.fillStyle = 'rgba(240, 215, 150, 0.95)';
     ctx.textAlign = 'center';
     ctx.fillText(kw, chipX + chipWidth / 2, valueY + 8);
 
     valueX += chipWidth + 16;
   });
 
-  // 8. 装飾線（上下）
-  ctx.strokeStyle = 'rgba(212, 168, 86, 0.2)';
-  ctx.lineWidth = 0.5;
-  ctx.beginPath();
-  ctx.moveTo(size * 0.2, 80);
-  ctx.lineTo(size * 0.8, 80);
-  ctx.stroke();
-
-  ctx.beginPath();
-  ctx.moveTo(size * 0.2, size - 120);
-  ctx.lineTo(size * 0.8, size - 120);
-  ctx.stroke();
-
   return artCanvas;
+}
+
+/**
+ * ボケ光粒子を描画（希望の光の表現）
+ */
+function drawBokehParticles(ctx, size) {
+  ctx.globalCompositeOperation = 'screen';
+
+  // シード固定でランダム風配置（毎回同じ位置にならないよう現在時刻を使用）
+  const seed = Math.floor(Date.now() / 1000);
+  let s = seed;
+  const rng = () => {
+    s = (s * 1103515245 + 12345) & 0x7fffffff;
+    return s / 0x7fffffff;
+  };
+
+  const particleCount = 30;
+  for (let i = 0; i < particleCount; i++) {
+    const x = rng() * size;
+    const y = rng() * size;
+    const r = rng() * 25 + 8;
+    const alpha = rng() * 0.12 + 0.03;
+    const hue = rng() * 60 + 30; // ゴールド〜アンバー系
+
+    const grad = ctx.createRadialGradient(x, y, 0, x, y, r);
+    grad.addColorStop(0, `hsla(${hue}, 70%, 85%, ${alpha})`);
+    grad.addColorStop(0.5, `hsla(${hue}, 60%, 75%, ${alpha * 0.4})`);
+    grad.addColorStop(1, 'transparent');
+    ctx.beginPath();
+    ctx.arc(x, y, r, 0, Math.PI * 2);
+    ctx.fillStyle = grad;
+    ctx.fill();
+  }
+
+  ctx.globalCompositeOperation = 'source-over';
+}
+
+/**
+ * 小さなダイヤモンド装飾を描画
+ */
+function drawDiamond(ctx, x, y, size, color) {
+  ctx.beginPath();
+  ctx.moveTo(x, y - size);
+  ctx.lineTo(x + size * 0.6, y);
+  ctx.lineTo(x, y + size);
+  ctx.lineTo(x - size * 0.6, y);
+  ctx.closePath();
+  ctx.fillStyle = color;
+  ctx.fill();
 }
 
 /**
