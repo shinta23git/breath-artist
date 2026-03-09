@@ -956,15 +956,34 @@ export class GeometryEngine {
       h0.toFixed(2) + h1.toFixed(2) + sym + sat.toFixed(2)
     ));
 
+    // ===== シードで全体スタイルを決定（rng()を最初に使う）=====
+    const bgStyleIdx = Math.floor(rng() * 5);
+    const numRings   = 3 + Math.floor(rng() * 3); // 3〜5リング
+
+    // 背景スタイル定義（5種類）: [[hue, sat, light] x4 stops]
+    const bgStyles = [
+      // 0: ウォームサンライズ（アンバー/ゴールド）
+      [[h0+28, 38, 22], [h0+36, 48, 13], [h0+44, 54, 7], [h0+50, 60, 3]],
+      // 1: ディープコスモス（インディゴ/ネイビー）
+      [[h0+225, 48, 22], [h0+240, 56, 12], [h0+252, 62, 6], [h0+258, 68, 2]],
+      // 2: ミスティックパープル
+      [[h0+275, 50, 20], [h0+288, 56, 11], [h0+298, 62, 5], [h0+305, 66, 2]],
+      // 3: エメラルドナイト
+      [[h0+142, 45, 18], [h0+152, 52, 9], [h0+160, 57, 5], [h0+166, 62, 2]],
+      // 4: ローズクォーツ
+      [[h0+335, 48, 22], [h0+344, 55, 12], [h0+350, 60, 6], [h0+354, 65, 2]],
+    ];
+    const bgC = bgStyles[bgStyleIdx];
+
     ctx.save();
     ctx.translate(cx, cy);
 
     // ========== Layer 1: 背景 + 星空 ==========
     const bg = ctx.createRadialGradient(0, 0, 0, 0, 0, size * 0.72);
-    bg.addColorStop(0, hsl(h0 + 240, 40, 24, 1));
-    bg.addColorStop(0.4, hsl(h0 + 255, 50, 14, 1));
-    bg.addColorStop(0.75, hsl(h0 + 268, 55, 8, 1));
-    bg.addColorStop(1, hsl(h0 + 275, 60, 4, 1));
+    bg.addColorStop(0,    hsl(bgC[0][0], bgC[0][1], bgC[0][2], 1));
+    bg.addColorStop(0.4,  hsl(bgC[1][0], bgC[1][1], bgC[1][2], 1));
+    bg.addColorStop(0.75, hsl(bgC[2][0], bgC[2][1], bgC[2][2], 1));
+    bg.addColorStop(1,    hsl(bgC[3][0], bgC[3][1], bgC[3][2], 1));
     ctx.fillStyle = bg;
     ctx.fillRect(-cx, -cy, size, size);
 
@@ -999,59 +1018,60 @@ export class GeometryEngine {
     ctx.globalCompositeOperation = 'screen';
     this._drawGemRays(ctx, maxR, params);
 
-    // ========== Layer 4: 花弁リング群（外→内、マンダラの核心） ==========
+    // ========== Layer 4: ランダム花弁リング群（毎回異なるパターン） ==========
     ctx.globalCompositeOperation = 'screen';
 
-    // リング1: 最外周 — 尖った花弁（ティール〜グリーン系）
-    this._drawPetalRing(ctx, {
-      radius: maxR * 0.76, count: sym,
-      len: maxR * 0.28, width: maxR * 0.075,
-      hue0: h1 + 160, hueDrift: 70, sat: sat + 5, light: 55,
-      alpha: 0.55, rotation: 0, pointed: true,
-    });
-    // 同リングを回転ずらしで重ねて深み
-    this._drawPetalRing(ctx, {
-      radius: maxR * 0.74, count: sym,
-      len: maxR * 0.24, width: maxR * 0.065,
-      hue0: h1 + 175, hueDrift: 55, sat: sat, light: 50,
-      alpha: 0.35, rotation: Math.PI / sym, pointed: true,
-    });
+    // 色相プール（12候補）からリングごとにランダム選択
+    const huePool = [0, 25, 55, 100, 140, 165, 200, 225, 260, 295, 320, 345];
+    const ringHues = Array.from({ length: numRings + 3 }, () =>
+      h0 + huePool[Math.floor(rng() * huePool.length)]
+    );
 
-    // リング2: 中外周 — 丸い花弁（ブルー〜パープル系）
-    this._drawPetalRing(ctx, {
-      radius: maxR * 0.55, count: sym * 2,
-      len: maxR * 0.2, width: maxR * 0.075,
-      hue0: h0 + 220, hueDrift: 80, sat: sat, light: 55,
-      alpha: 0.5, rotation: 0, pointed: false,
-    });
-    this._drawPetalRing(ctx, {
-      radius: maxR * 0.53, count: sym * 2,
-      len: maxR * 0.17, width: maxR * 0.06,
-      hue0: h0 + 240, hueDrift: 60, sat: sat - 5, light: 50,
-      alpha: 0.3, rotation: Math.PI / (sym * 2), pointed: false,
-    });
+    // 外→内の基準半径
+    const baseRadii = [0.82, 0.65, 0.50, 0.35, 0.22];
 
-    // リング3: 中周 — ゴールド〜アンバー系
-    this._drawPetalRing(ctx, {
-      radius: maxR * 0.4, count: sym + 4,
-      len: maxR * 0.18, width: maxR * 0.065,
-      hue0: h0 + 30, hueDrift: 45, sat: sat + 10, light: 62,
-      alpha: 0.55, rotation: Math.PI / (sym + 4) * 0.5, pointed: false,
-    });
+    for (let ri = 0; ri < numRings; ri++) {
+      const baseR      = Math.max(0.16, baseRadii[ri] + (rng() - 0.5) * 0.07);
+      const isLarge    = rng() > 0.38;
+      const isPointed  = rng() > 0.50;
+      const countMult  = 1 + Math.floor(rng() * 3); // sym x1/x2/x3
+      const ringLen    = maxR * (isLarge ? 0.20 + rng() * 0.16 : 0.10 + rng() * 0.12);
+      const ringAlpha  = 0.38 + rng() * 0.32;
+      const ringHue    = ringHues[ri];
+      const ringRot    = rng() * Math.PI / sym;
 
-    // リング4: 内周 — ピンク〜コーラル系
-    this._drawPetalRing(ctx, {
-      radius: maxR * 0.25, count: sym,
-      len: maxR * 0.16, width: maxR * 0.06,
-      hue0: h0 + 330, hueDrift: 35, sat: sat + 5, light: 65,
-      alpha: 0.55, rotation: 0, pointed: false,
-    });
-    this._drawPetalRing(ctx, {
-      radius: maxR * 0.24, count: sym,
-      len: maxR * 0.13, width: maxR * 0.05,
-      hue0: h0 + 345, hueDrift: 25, sat: sat, light: 60,
-      alpha: 0.35, rotation: Math.PI / sym, pointed: false,
-    });
+      // メインリング
+      this._drawPetalRing(ctx, {
+        radius: maxR * baseR,
+        count:  sym * countMult,
+        len:    ringLen,
+        width:  maxR * (0.044 + rng() * 0.065),
+        hue0:   ringHue,
+        hueDrift: 28 + rng() * 68,
+        sat:    sat + (rng() - 0.5) * 16,
+        light:  52 + rng() * 22,
+        alpha:  ringAlpha,
+        rotation: ringRot,
+        pointed: isPointed,
+      });
+
+      // 60%の確率でオフセット重ねリングを追加（深み演出）
+      if (rng() > 0.40) {
+        this._drawPetalRing(ctx, {
+          radius: maxR * baseR,
+          count:  sym * countMult,
+          len:    ringLen * (0.65 + rng() * 0.30),
+          width:  maxR * (0.040 + rng() * 0.050),
+          hue0:   ringHue + 20 + Math.floor(rng() * 40),
+          hueDrift: 30 + rng() * 50,
+          sat:    sat + (rng() - 0.5) * 12,
+          light:  54 + rng() * 20,
+          alpha:  ringAlpha * (0.35 + rng() * 0.35),
+          rotation: ringRot + Math.PI / (sym * countMult),
+          pointed: isPointed,
+        });
+      }
+    }
 
     // ========== Layer 5: 幾何学オーバーレイ（既存描画を活用） ==========
     ctx.globalCompositeOperation = 'screen';
