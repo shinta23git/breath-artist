@@ -934,6 +934,155 @@ export class GeometryEngine {
     }
   }
 
+  /** ヘックステッセレーション（大きな重なり合う円の格子）*/
+  _drawHexTessellation(ctx, maxR, params) {
+    const h0 = params.hueBase + 185;
+    const circleR = maxR * 0.40;
+    const centers = [{ x: 0, y: 0 }];
+    for (let ring = 1; ring <= 2; ring++) {
+      for (let side = 0; side < 6; side++) {
+        const a1 = (side / 6) * Math.PI * 2;
+        const a2 = ((side + 1) / 6) * Math.PI * 2;
+        for (let pos = 0; pos < ring; pos++) {
+          const t = pos / ring;
+          centers.push({
+            x: lerp(Math.cos(a1), Math.cos(a2), t) * circleR * ring,
+            y: lerp(Math.sin(a1), Math.sin(a2), t) * circleR * ring,
+          });
+        }
+      }
+    }
+    centers.forEach((c, i) => {
+      const dist = Math.sqrt(c.x * c.x + c.y * c.y);
+      const alpha = Math.max(0.04, 0.38 - dist / (maxR * 1.7));
+      const hue = h0 + i * 18;
+      const g = ctx.createRadialGradient(c.x, c.y, 0, c.x, c.y, circleR);
+      g.addColorStop(0, hsl(hue, 65, 58, alpha * 0.18));
+      g.addColorStop(0.7, hsl(hue, 55, 50, alpha * 0.07));
+      g.addColorStop(1, 'transparent');
+      ctx.beginPath();
+      ctx.arc(c.x, c.y, circleR, 0, Math.PI * 2);
+      ctx.fillStyle = g;
+      ctx.fill();
+      ctx.strokeStyle = hsl(hue, 62, 72, alpha * 0.80);
+      ctx.lineWidth = 1.4;
+      ctx.stroke();
+    });
+  }
+
+  /** ダイヤモンドグリッド（斜め正方形の格子）*/
+  _drawDiamondGrid(ctx, maxR, params) {
+    const h0 = params.hueBase;
+    const tw = maxR * 0.19;
+    const th = maxR * 0.13;
+    const cols = Math.ceil(maxR / tw) + 2;
+    const rows = Math.ceil(maxR / th) + 2;
+    for (let row = -rows; row <= rows; row++) {
+      for (let col = -cols; col <= cols; col++) {
+        const x = col * tw + (row % 2) * tw * 0.5;
+        const y = row * th;
+        const dist = Math.sqrt(x * x + y * y);
+        if (dist > maxR * 1.02) continue;
+        const alpha = Math.max(0, 0.40 - dist / (maxR * 1.12));
+        if (alpha < 0.01) continue;
+        const hue = h0 + (((col * 7 + row * 11) % 80) + 80) % 80;
+        ctx.beginPath();
+        ctx.moveTo(x,            y - th * 0.88);
+        ctx.lineTo(x + tw * 0.88, y);
+        ctx.lineTo(x,            y + th * 0.88);
+        ctx.lineTo(x - tw * 0.88, y);
+        ctx.closePath();
+        ctx.fillStyle = hsl(hue, 55, 52, alpha * 0.42);
+        ctx.fill();
+        ctx.strokeStyle = hsl(hue, 50, 76, alpha * 0.70);
+        ctx.lineWidth = 0.7;
+        ctx.stroke();
+      }
+    }
+  }
+
+  /** ゴールデン軌道リング（螺旋装飾付き） */
+  _drawGoldenOrbit(ctx, maxR, params) {
+    const r = maxR * 0.63;
+    const ornCount = Math.max(3, Math.round(params.symmetry / 3));
+    ctx.save();
+    // 外枠グロー
+    ctx.beginPath();
+    ctx.arc(0, 0, r, 0, Math.PI * 2);
+    const rg = ctx.createLinearGradient(-r, -r, r, r);
+    rg.addColorStop(0,   PALETTE.gold(0.22));
+    rg.addColorStop(0.3, PALETTE.gold(0.88));
+    rg.addColorStop(0.6, PALETTE.gold(0.98));
+    rg.addColorStop(1,   PALETTE.gold(0.22));
+    ctx.strokeStyle = rg;
+    ctx.lineWidth = 3.5;
+    ctx.shadowColor = PALETTE.gold(0.9);
+    ctx.shadowBlur = 14;
+    ctx.stroke();
+    ctx.shadowBlur = 0;
+    // 内側細リング
+    ctx.beginPath();
+    ctx.arc(0, 0, r * 0.93, 0, Math.PI * 2);
+    ctx.strokeStyle = PALETTE.gold(0.28);
+    ctx.lineWidth = 0.8;
+    ctx.stroke();
+    // 螺旋装飾
+    for (let i = 0; i < ornCount; i++) {
+      const angle = (i / ornCount) * Math.PI * 2;
+      ctx.save();
+      ctx.translate(r * Math.cos(angle), r * Math.sin(angle));
+      ctx.rotate(angle + Math.PI / 2);
+      ctx.beginPath();
+      for (let t = 0.3; t <= Math.PI * 3.8; t += 0.08) {
+        const sr = t * 3.8;
+        if (t <= 0.38) ctx.moveTo(sr * Math.cos(t), sr * Math.sin(t));
+        else           ctx.lineTo(sr * Math.cos(t), sr * Math.sin(t));
+      }
+      ctx.strokeStyle = PALETTE.gold(0.55);
+      ctx.lineWidth = 0.9;
+      ctx.stroke();
+      ctx.restore();
+    }
+    ctx.restore();
+  }
+
+  /** エネルギー爆発（炎・火花の放射） */
+  _drawEnergyBurst(ctx, maxR, params, rng) {
+    const lineCount = Math.round(params.symmetry) * 10;
+    ctx.save();
+    for (let i = 0; i < lineCount; i++) {
+      const angle = (i / lineCount) * Math.PI * 2;
+      const len   = maxR * (0.22 + rng() * 0.28);
+      const alpha = 0.35 + rng() * 0.45;
+      const hue   = 20 + rng() * 35;
+      const lw    = 0.4 + rng() * 2.0;
+      const ex = Math.cos(angle) * len;
+      const ey = Math.sin(angle) * len;
+      const g = ctx.createLinearGradient(0, 0, ex, ey);
+      g.addColorStop(0,   hsl(hue,      95, 86, alpha));
+      g.addColorStop(0.4, hsl(hue + 12, 90, 70, alpha * 0.7));
+      g.addColorStop(1,   hsl(hue + 22, 85, 55, 0));
+      ctx.beginPath();
+      ctx.moveTo(0, 0);
+      ctx.lineTo(ex, ey);
+      ctx.strokeStyle = g;
+      ctx.lineWidth = lw;
+      ctx.stroke();
+    }
+    const fg = ctx.createRadialGradient(0, 0, 0, 0, 0, maxR * 0.32);
+    fg.addColorStop(0,    hsl(55,  100, 98, 0.95));
+    fg.addColorStop(0.1,  hsl(42,   98, 88, 0.85));
+    fg.addColorStop(0.25, hsl(25,   95, 72, 0.65));
+    fg.addColorStop(0.5,  hsl(10,   90, 55, 0.30));
+    fg.addColorStop(0.75, hsl(5,    80, 40, 0.10));
+    fg.addColorStop(1,    'transparent');
+    ctx.beginPath();
+    ctx.arc(0, 0, maxR * 0.32, 0, Math.PI * 2);
+    ctx.fillStyle = fg;
+    ctx.fill();
+    ctx.restore();
+  }
+
   // ===== キャプチャ（マンダラアート生成） =====
   capture(size) {
     const captureCanvas = document.createElement('canvas');
@@ -957,8 +1106,12 @@ export class GeometryEngine {
     ));
 
     // ===== シードで全体スタイルを決定（rng()を最初に使う）=====
-    const bgStyleIdx = Math.floor(rng() * 5);
-    const numRings   = 3 + Math.floor(rng() * 3); // 3〜5リング
+    const bgStyleIdx  = Math.floor(rng() * 5);
+    const numRings    = 3 + Math.floor(rng() * 3); // 3〜5リング
+    const bgTexture   = Math.floor(rng() * 3);     // 0=星のみ 1=ヘックス 2=ダイヤ
+    const geoOverlay  = Math.floor(rng() * 4);     // 0=花+六芒星 1=メタトロン 2=万華鏡 3=スパイラル
+    const centerStyle = Math.floor(rng() * 3);     // 0=蓮 1=エネルギー爆発 2=グローのみ
+    const hasOrbit    = rng() > 0.45;              // ゴールデン軌道リング（55%）
 
     // 背景スタイル定義（5種類）: [[hue, sat, light] x4 stops]
     const bgStyles = [
@@ -1004,6 +1157,15 @@ export class GeometryEngine {
     // 星空
     ctx.globalCompositeOperation = 'lighter';
     this._drawStarField(ctx, cx, rng);
+
+    // ========== Layer 1.5: 背景テクスチャ（ヘックス or ダイヤモンド格子）==========
+    if (bgTexture === 1) {
+      ctx.globalCompositeOperation = 'screen';
+      this._drawHexTessellation(ctx, maxR, params);
+    } else if (bgTexture === 2) {
+      ctx.globalCompositeOperation = 'screen';
+      this._drawDiamondGrid(ctx, maxR, params);
+    }
 
     // ========== Layer 2: 外側オーラ ==========
     ctx.globalCompositeOperation = 'screen';
@@ -1073,18 +1235,43 @@ export class GeometryEngine {
       }
     }
 
-    // ========== Layer 5: 幾何学オーバーレイ（既存描画を活用） ==========
+    // ========== Layer 5: 幾何学オーバーレイ（4パターンからランダム選択）==========
     ctx.globalCompositeOperation = 'screen';
-    this.drawFlowerOfLife(ctx, params, maxR, elapsed);
-    this.drawHexagrams(ctx, params, maxR, elapsed);
-    this.drawGoldenSpirals(ctx, params, maxR, elapsed);
+    if (geoOverlay === 0) {
+      // フラワー・オブ・ライフ + 六芒星
+      this.drawFlowerOfLife(ctx, params, maxR, elapsed);
+      this.drawHexagrams(ctx, params, maxR, elapsed);
+      this.drawFlowerOfLife(ctx, params, maxR, elapsed + 0.5);
+    } else if (geoOverlay === 1) {
+      // メタトロンキューブ + フラワー
+      this.drawFlowerOfLife(ctx, params, maxR, elapsed);
+      this.drawMetatronsCube(ctx, params, maxR, elapsed);
+    } else if (geoOverlay === 2) {
+      // 万華鏡セグメント + フラワー
+      this.drawKaleidoscope(ctx, params, maxR, elapsed);
+      this.drawFlowerOfLife(ctx, params, maxR, elapsed);
+    } else {
+      // ゴールデンスパイラル + 六芒星
+      this.drawGoldenSpirals(ctx, params, maxR, elapsed);
+      this.drawHexagrams(ctx, params, maxR, elapsed);
+      this.drawFlowerOfLife(ctx, params, maxR, elapsed + 1.0);
+    }
 
-    // 2パス目で輝度アップ
-    this.drawFlowerOfLife(ctx, params, maxR, elapsed + 0.5);
+    // ========== Layer 5.5: ゴールデン軌道リング（確率的）==========
+    if (hasOrbit) {
+      ctx.globalCompositeOperation = 'lighter';
+      this._drawGoldenOrbit(ctx, maxR, params);
+    }
 
-    // ========== Layer 6: ロータス中心花 ==========
-    ctx.globalCompositeOperation = 'screen';
-    this._drawLotusCenter(ctx, maxR, params);
+    // ========== Layer 6: 中心スタイル（3種からランダム選択）==========
+    if (centerStyle === 0) {
+      ctx.globalCompositeOperation = 'screen';
+      this._drawLotusCenter(ctx, maxR, params);
+    } else if (centerStyle === 1) {
+      ctx.globalCompositeOperation = 'lighter';
+      this._drawEnergyBurst(ctx, maxR, params, rng);
+    }
+    // centerStyle === 2: 中心グロー（Layer 9）のみ、ここは何もしない
 
     // ========== Layer 7: ワイヤーフレーム装飾 ==========
     // 同心円
