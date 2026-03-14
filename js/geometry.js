@@ -935,8 +935,8 @@ export class GeometryEngine {
   }
 
   /** ヘックステッセレーション（大きな重なり合う円の格子）*/
-  _drawHexTessellation(ctx, maxR, params) {
-    const h0 = params.hueBase + 185;
+  _drawHexTessellation(ctx, maxR, params, tessHue) {
+    const h0 = tessHue !== undefined ? tessHue : params.hueBase + 185;
     const circleR = maxR * 0.40;
     const centers = [{ x: 0, y: 0 }];
     for (let ring = 1; ring <= 2; ring++) {
@@ -971,8 +971,8 @@ export class GeometryEngine {
   }
 
   /** ダイヤモンドグリッド（斜め正方形の格子）*/
-  _drawDiamondGrid(ctx, maxR, params) {
-    const h0 = params.hueBase;
+  _drawDiamondGrid(ctx, maxR, params, gridHue) {
+    const h0 = gridHue !== undefined ? gridHue : params.hueBase;
     const tw = maxR * 0.19;
     const th = maxR * 0.13;
     const cols = Math.ceil(maxR / tw) + 2;
@@ -1002,28 +1002,31 @@ export class GeometryEngine {
   }
 
   /** ゴールデン軌道リング（螺旋装飾付き） */
-  _drawGoldenOrbit(ctx, maxR, params) {
+  _drawGoldenOrbit(ctx, maxR, params, orbitHue) {
     const r = maxR * 0.63;
     const ornCount = Math.max(3, Math.round(params.symmetry / 3));
+    // 軌道リングの色（ゴールド/シルバー/ローズ/ティール/パープルなど）
+    const oh = orbitHue !== undefined ? orbitHue : 42;
+    const orbitColor = (a) => hsl(oh, 78, 68, a);
     ctx.save();
     // 外枠グロー
     ctx.beginPath();
     ctx.arc(0, 0, r, 0, Math.PI * 2);
     const rg = ctx.createLinearGradient(-r, -r, r, r);
-    rg.addColorStop(0,   PALETTE.gold(0.22));
-    rg.addColorStop(0.3, PALETTE.gold(0.88));
-    rg.addColorStop(0.6, PALETTE.gold(0.98));
-    rg.addColorStop(1,   PALETTE.gold(0.22));
+    rg.addColorStop(0,   orbitColor(0.22));
+    rg.addColorStop(0.3, orbitColor(0.88));
+    rg.addColorStop(0.6, orbitColor(0.98));
+    rg.addColorStop(1,   orbitColor(0.22));
     ctx.strokeStyle = rg;
     ctx.lineWidth = 3.5;
-    ctx.shadowColor = PALETTE.gold(0.9);
+    ctx.shadowColor = orbitColor(0.9);
     ctx.shadowBlur = 14;
     ctx.stroke();
     ctx.shadowBlur = 0;
     // 内側細リング
     ctx.beginPath();
     ctx.arc(0, 0, r * 0.93, 0, Math.PI * 2);
-    ctx.strokeStyle = PALETTE.gold(0.28);
+    ctx.strokeStyle = orbitColor(0.28);
     ctx.lineWidth = 0.8;
     ctx.stroke();
     // 螺旋装飾
@@ -1038,7 +1041,7 @@ export class GeometryEngine {
         if (t <= 0.38) ctx.moveTo(sr * Math.cos(t), sr * Math.sin(t));
         else           ctx.lineTo(sr * Math.cos(t), sr * Math.sin(t));
       }
-      ctx.strokeStyle = PALETTE.gold(0.55);
+      ctx.strokeStyle = orbitColor(0.55);
       ctx.lineWidth = 0.9;
       ctx.stroke();
       ctx.restore();
@@ -1047,14 +1050,15 @@ export class GeometryEngine {
   }
 
   /** エネルギー爆発（炎・火花の放射） */
-  _drawEnergyBurst(ctx, maxR, params, rng) {
+  _drawEnergyBurst(ctx, maxR, params, rng, burstHue) {
     const lineCount = Math.round(params.symmetry) * 10;
+    const baseHue = burstHue !== undefined ? burstHue : 20 + rng() * 35;
     ctx.save();
     for (let i = 0; i < lineCount; i++) {
       const angle = (i / lineCount) * Math.PI * 2;
       const len   = maxR * (0.22 + rng() * 0.28);
       const alpha = 0.35 + rng() * 0.45;
-      const hue   = 20 + rng() * 35;
+      const hue   = baseHue + rng() * 40 - 20;
       const lw    = 0.4 + rng() * 2.0;
       const ex = Math.cos(angle) * len;
       const ey = Math.sin(angle) * len;
@@ -1070,11 +1074,11 @@ export class GeometryEngine {
       ctx.stroke();
     }
     const fg = ctx.createRadialGradient(0, 0, 0, 0, 0, maxR * 0.32);
-    fg.addColorStop(0,    hsl(55,  100, 98, 0.95));
-    fg.addColorStop(0.1,  hsl(42,   98, 88, 0.85));
-    fg.addColorStop(0.25, hsl(25,   95, 72, 0.65));
-    fg.addColorStop(0.5,  hsl(10,   90, 55, 0.30));
-    fg.addColorStop(0.75, hsl(5,    80, 40, 0.10));
+    fg.addColorStop(0,    hsl(baseHue + 30, 100, 98, 0.95));
+    fg.addColorStop(0.1,  hsl(baseHue + 20,  98, 88, 0.85));
+    fg.addColorStop(0.25, hsl(baseHue + 5,   95, 72, 0.65));
+    fg.addColorStop(0.5,  hsl(baseHue - 10,  90, 55, 0.30));
+    fg.addColorStop(0.75, hsl(baseHue - 15,  80, 40, 0.10));
     fg.addColorStop(1,    'transparent');
     ctx.beginPath();
     ctx.arc(0, 0, maxR * 0.32, 0, Math.PI * 2);
@@ -1106,27 +1110,20 @@ export class GeometryEngine {
     ));
 
     // ===== シードで全体スタイルを決定（rng()を最初に使う）=====
-    const bgStyleIdx  = Math.floor(rng() * 5);
     const numRings    = 3 + Math.floor(rng() * 3); // 3〜5リング
     const bgTexture   = Math.floor(rng() * 3);     // 0=星のみ 1=ヘックス 2=ダイヤ
     const geoOverlay  = Math.floor(rng() * 4);     // 0=花+六芒星 1=メタトロン 2=万華鏡 3=スパイラル
     const centerStyle = Math.floor(rng() * 3);     // 0=蓮 1=エネルギー爆発 2=グローのみ
-    const hasOrbit    = rng() > 0.45;              // ゴールデン軌道リング（55%）
+    const hasOrbit    = rng() > 0.45;              // 軌道リング（55%）
 
-    // 背景スタイル定義（5種類）: [[hue, sat, light] x4 stops]
-    const bgStyles = [
-      // 0: ウォームサンライズ（アンバー/ゴールド）
-      [[h0+28, 38, 22], [h0+36, 48, 13], [h0+44, 54, 7], [h0+50, 60, 3]],
-      // 1: ディープコスモス（インディゴ/ネイビー）
-      [[h0+225, 48, 22], [h0+240, 56, 12], [h0+252, 62, 6], [h0+258, 68, 2]],
-      // 2: ミスティックパープル
-      [[h0+275, 50, 20], [h0+288, 56, 11], [h0+298, 62, 5], [h0+305, 66, 2]],
-      // 3: エメラルドナイト
-      [[h0+142, 45, 18], [h0+152, 52, 9], [h0+160, 57, 5], [h0+166, 62, 2]],
-      // 4: ローズクォーツ
-      [[h0+335, 48, 22], [h0+344, 55, 12], [h0+350, 60, 6], [h0+354, 65, 2]],
+    // 背景色をh0非依存のランダム色相で決定（淡い色調）
+    const bgHue = rng() * 360;
+    const bgC = [
+      [bgHue,      42 + rng() * 16, 26 + rng() * 6],
+      [bgHue + 8,  50 + rng() * 12, 16 + rng() * 5],
+      [bgHue + 14, 55 + rng() * 10,  9 + rng() * 4],
+      [bgHue + 18, 60 + rng() * 8,   4 + rng() * 3],
     ];
-    const bgC = bgStyles[bgStyleIdx];
 
     ctx.save();
     ctx.translate(cx, cy);
@@ -1146,7 +1143,7 @@ export class GeometryEngine {
       const nx = (rng() - 0.5) * size * 0.7;
       const ny = (rng() - 0.5) * size * 0.7;
       const nr = rng() * size * 0.22 + size * 0.08;
-      const nh = h0 + rng() * 150;
+      const nh = rng() * 360;
       const ng = ctx.createRadialGradient(nx, ny, 0, nx, ny, nr);
       ng.addColorStop(0, hsl(nh, 50, 45, 0.1));
       ng.addColorStop(1, 'transparent');
@@ -1159,12 +1156,13 @@ export class GeometryEngine {
     this._drawStarField(ctx, cx, rng);
 
     // ========== Layer 1.5: 背景テクスチャ（ヘックス or ダイヤモンド格子）==========
+    const tessHue = rng() * 360;
     if (bgTexture === 1) {
       ctx.globalCompositeOperation = 'screen';
-      this._drawHexTessellation(ctx, maxR, params);
+      this._drawHexTessellation(ctx, maxR, params, tessHue);
     } else if (bgTexture === 2) {
       ctx.globalCompositeOperation = 'screen';
-      this._drawDiamondGrid(ctx, maxR, params);
+      this._drawDiamondGrid(ctx, maxR, params, tessHue);
     }
 
     // ========== Layer 2: 外側オーラ ==========
@@ -1183,10 +1181,10 @@ export class GeometryEngine {
     // ========== Layer 4: ランダム花弁リング群（毎回異なるパターン） ==========
     ctx.globalCompositeOperation = 'screen';
 
-    // 色相プール（12候補）からリングごとにランダム選択
-    const huePool = [0, 25, 55, 100, 140, 165, 200, 225, 260, 295, 320, 345];
-    const ringHues = Array.from({ length: numRings + 3 }, () =>
-      h0 + huePool[Math.floor(rng() * huePool.length)]
+    // 色相を h0, h1, ランダムの3ソースからミックス（毎回異なるカラーパレット）
+    const hueSources = [h0, h1, rng() * 360, (h0 + 180) % 360, (h1 + 120) % 360, rng() * 360];
+    const ringHues = Array.from({ length: numRings + 3 }, (_, i) =>
+      hueSources[i % hueSources.length] + rng() * 70 - 35
     );
 
     // 外→内の基準半径
@@ -1257,10 +1255,10 @@ export class GeometryEngine {
       this.drawFlowerOfLife(ctx, params, maxR, elapsed + 1.0);
     }
 
-    // ========== Layer 5.5: ゴールデン軌道リング（確率的）==========
+    // ========== Layer 5.5: 軌道リング（確率的・色はランダム）==========
     if (hasOrbit) {
       ctx.globalCompositeOperation = 'lighter';
-      this._drawGoldenOrbit(ctx, maxR, params);
+      this._drawGoldenOrbit(ctx, maxR, params, rng() * 360);
     }
 
     // ========== Layer 6: 中心スタイル（3種からランダム選択）==========
@@ -1269,7 +1267,7 @@ export class GeometryEngine {
       this._drawLotusCenter(ctx, maxR, params);
     } else if (centerStyle === 1) {
       ctx.globalCompositeOperation = 'lighter';
-      this._drawEnergyBurst(ctx, maxR, params, rng);
+      this._drawEnergyBurst(ctx, maxR, params, rng, rng() * 360);
     }
     // centerStyle === 2: 中心グロー（Layer 9）のみ、ここは何もしない
 
